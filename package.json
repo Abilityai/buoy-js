@@ -1,0 +1,16 @@
+{
+  "name": "@abilityai/buoy",
+  "version": "0.0.1",
+  "description": "The client SDK to connect to the ability.ai junction server",
+  "type": "module",
+  "main": "src/index.js",
+  "repository": "https://github.com/Abilityai/buoy-js",
+  "author": "Alex Osypenko <alex@ability.ai>",
+  "license": "COMMERCIAL",
+  "private": true,
+  "dependencies": {
+    "axios": "^1.7.9",
+    "events": "^3.3.0",
+    "ws": "^8.18.0"
+  }
+}
