@@ -76,14 +76,18 @@ client.logs(({ message, from, timestamp }) => {
 
 ## Configuration
 
-The `connect()` method accepts the following options:
+The `Buoy()` method accepts a config object with the following options:
 
-- `token` - Agent authentication token
-- `name` - Agent name identifier
-- `version` - Agent version (semver format)
-- `actions` - Array of action definitions
-- `ws_url` - Custom WebSocket URL (defaults to env JUNCTION_WS_URL)
-- `http_url` - Custom HTTP URL (defaults to env JUNCTION_HTTP_URL)
+- `token` - Agent authentication token (required, falls back to AGENT_TOKEN or BUOY_TOKEN env var)
+- `name` - Agent name identifier (falls back to package.json name)
+- `version` - Agent version (falls back to package.json version)
+- `actions` - Array of action definitions (falls back to actions.yml file)
+- `domain` - Server domain (defaults to JUNCTION_DOMAIN env var or 'localhost')
+- `port` - Server port (defaults to JUNCTION_PORT env var or 3005)
+- `ws_protocol` - WebSocket protocol ('ws' or 'wss', defaults based on port)
+- `http_protocol` - HTTP protocol ('http' or 'https', defaults based on port)
+- `ws_url` - Custom WebSocket URL (defaults to JUNCTION_WS_URL env var or protocol://domain:port/connection)
+- `http_url` - Custom HTTP URL (defaults to JUNCTION_HTTP_URL env var or protocol://domain:port)
 
 ## API Reference
 
@@ -143,11 +147,15 @@ client.on('action', async ({ say, ack }) => {
 
 ## Environment Variables
 
-- `JUNCTION_WS_URL` - WebSocket URL
-- `JUNCTION_HTTP_URL` - HTTP URL
-- `AGENT_TOKEN` - Default agent token
-- `AGENT_NAME` - Default agent name
-- `AGENT_VERSION` - Default agent version
+- `JUNCTION_DOMAIN` - Server domain (defaults to 'localhost')
+- `JUNCTION_PORT` - Server port (defaults to 3005)
+- `JUNCTION_WS_PROTOCOL` - WebSocket protocol ('ws' or 'wss', defaults based on port)
+- `JUNCTION_HTTP_PROTOCOL` - HTTP protocol ('http' or 'https', defaults based on port)
+- `JUNCTION_WS_URL` - Full WebSocket URL (defaults to protocol://domain:port/connection)
+- `JUNCTION_HTTP_URL` - Full HTTP URL (defaults to protocol://domain:port)
+- `AGENT_TOKEN` or `BUOY_TOKEN` - Agent authentication token
+- `AGENT_NAME` - Agent name identifier
+- `AGENT_VERSION` - Agent version (falls back to package.json)
 
 ## License
 

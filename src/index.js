@@ -19,8 +19,45 @@ export default async function Buoy(config1, config2 = {}) {
   if (config2 && typeof config2 === 'object') {
     config = { ...config, ...config2 };
   }
-  const wsUrl = config.ws_url || process.env.JUNCTION_WS_URL || 'ws://localhost:3005/connection';
-  const httpUrl = config.http_url || process.env.JUNCTION_HTTP_URL || 'http://localhost:3005';
+  const domain = config.domain || process.env.JUNCTION_DOMAIN || 'localhost';
+  const port = config.port || process.env.JUNCTION_PORT || 3005;
+
+  const host = (function ({ domain, port }) {
+    if (port === 80 || port === 443) {
+      return domain;
+    }
+    return `${domain}:${port}`;
+  })({ domain, port });
+
+  const wsProtocol = (function ({ port }) {
+    if (config.ws_protocol) {
+      return config.ws_protocol;
+
+    } else if (process.env.JUNCTION_WS_PROTOCOL) {
+      return process.env.JUNCTION_WS_PROTOCOL;
+    } else {
+      return port === 443 ? 'wss' : 'ws';
+    }
+  })({ port });
+
+  const httpProtocol = (function ({ port }) {
+    if (config.http_protocol) {
+      return config.http_protocol;
+    } else if (process.env.JUNCTION_HTTP_PROTOCOL) {
+      return process.env.JUNCTION_HTTP_PROTOCOL;
+    } else {
+      return port === 443 ? 'https' : 'http';
+    }
+  })({ port });
+
+  const wsUrl = (function ({ host, wsProtocol }) {
+    config.ws_url || process.env.JUNCTION_WS_URL || `${wsProtocol}://${host}/connection`;
+  })({ host, wsProtocol });
+
+  const httpUrl = (function ({ host, httpProtocol }) {
+    return config.http_url || process.env.JUNCTION_HTTP_URL || `${httpProtocol}://${host}`;
+  })({ host, httpProtocol });
+
   const token = config.token || process.env.AGENT_TOKEN || process.env.BUOY_TOKEN;
   let name = config.name || process.env.AGENT_NAME;
   if (!name) {
