@@ -7,96 +7,13 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import yaml from 'js-yaml';
 
+import getConfig from './config.js';
 import BuoyClient from './buoy-client.js';
 
 export default async function Buoy(config1, config2 = {}) {
-  let config = {};
-  if (typeof config1 === 'string') {
-    config = { name: config1 };
-  } else {
-    config = { ...config1 };
-  }
-  if (config2 && typeof config2 === 'object') {
-    config = { ...config, ...config2 };
-  }
-  const domain = config.domain || process.env.JUNCTION_DOMAIN || 'localhost';
-  const port = config.port || process.env.JUNCTION_PORT || 3005;
+  const { name, version, token, actions, wsUrl, httpUrl } = getConfig(config1, config2);
 
-  const host = (function ({ domain, port }) {
-    if (port === 80 || port === 443) {
-      return domain;
-    }
-    return `${domain}:${port}`;
-  })({ domain, port });
-
-  const wsProtocol = (function ({ port }) {
-    if (config.ws_protocol) {
-      return config.ws_protocol;
-
-    } else if (process.env.JUNCTION_WS_PROTOCOL) {
-      return process.env.JUNCTION_WS_PROTOCOL;
-    } else {
-      return port === 443 ? 'wss' : 'ws';
-    }
-  })({ port });
-
-  const httpProtocol = (function ({ port }) {
-    if (config.http_protocol) {
-      return config.http_protocol;
-    } else if (process.env.JUNCTION_HTTP_PROTOCOL) {
-      return process.env.JUNCTION_HTTP_PROTOCOL;
-    } else {
-      return port === 443 ? 'https' : 'http';
-    }
-  })({ port });
-
-  const wsUrl = (function ({ host, wsProtocol }) {
-    return config.ws_url || process.env.JUNCTION_WS_URL || `${wsProtocol}://${host}/connection`;
-  })({ host, wsProtocol });
-
-  const httpUrl = (function ({ host, httpProtocol }) {
-    return config.http_url || process.env.JUNCTION_HTTP_URL || `${httpProtocol}://${host}`;
-  })({ host, httpProtocol });
-
-  const token = config.token || process.env.AGENT_TOKEN || process.env.BUOY_TOKEN;
-  let name = config.name || process.env.AGENT_NAME;
-  if (!name) {
-    try {
-      const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json')));
-      name = packageJson.name;
-    } catch (err) {
-      console.error('Error reading package.json:', err);
-      throw new Error('Agent name is required');
-    }
-  }
-
-  let version = config.version || process.env.AGENT_VERSION;
-  if (!version) {
-    try {
-      const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json')));
-      version = packageJson.version;
-    } catch (err) {
-      console.error('Error reading package.json:', err);
-      throw new Error('Agent version is required');
-    }
-  }
-
-  let actions = config.actions || (() => {
-    try {
-      return yaml.load(readFileSync(join(process.cwd(), 'actions.yml'), 'utf8')) || [];
-    } catch (err) {
-      return [];
-    }
-  })();
-
-  if (!token) throw new Error('Agent token is required');
-
-  const payload = {
-    name,
-    version,
-    actions: actions,
-  }
-
+  const payload = { name, version, actions };
   const headers = { token, payload: JSON.stringify(payload) };
 
   return new Promise((resolve, reject) => {
