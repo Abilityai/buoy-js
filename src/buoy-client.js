@@ -1,79 +1,99 @@
-import WebSocket from 'ws';
-
-export class BuoyClient {
-  constructor(ws, config) {
+class BuoyClient {
+  constructor(ws, config, onHello) {
     this.ws = ws;
     this.config = config;
     this.requestCallbacks = new Map();
     this.taskHandlers = new Map();
     this.pendingResponses = new Map();
-    this.logHandlers = [];
     this.handlers = new Map();
-    this.tools = [];
-    this.toolsInitialized = false;
-    this.pendingToolRequests = [];
+    this.receivedHello = false;
+    this.pendingSayFns = new Map();
 
-    this.ws.on('message', (data) => {
+    this.ws.on('message', async (data) => {
       try {
-        this._handleMessage(JSON.parse(data));
+        const message = JSON.parse(data);
+        if (message.type === 'hello') {
+          if (!this.receivedHello) {
+            this.receivedHello = true;
+            onHello();
+          }
+          return;
+        }
+        await this._handleMessage(message);
       } catch(err) {
         console.error('Error parsing message:', err);
       }
     });
   }
 
-  tool(agentName, version = '*.*.*') {
-    return async (action, payload) => {
-      if (!this.toolsInitialized) {
-        return new Promise((resolve, reject) => {
-          this.pendingToolRequests.push({ agentName, version, action, payload, resolve, reject });
-        });
+  get name() {
+    return this.config.name;
+  }
+
+  get version() {
+    return this.config.version;
+  }
+
+  tool(agent, version, action) {
+    const toolObject = async (payload, ...args) => {
+      let request_ids = undefined;
+      let say_fn = () => {};
+
+      for (const arg of args) {
+        if (typeof arg === 'function') {
+          say_fn = arg;
+        } else {
+          request_ids = arg;
+        }
       }
-      if (!this.tools.some(t => t.agent_name === agentName)) {
-        throw new Error(`Agent ${agentName} not found in available tools`);
-      }
-      const requestId = this._generateRequestId();
+
+      const request_id = this._generateRequestId();
 
       return new Promise((resolve, reject) => {
-        this.pendingResponses.set(requestId, { resolve, reject });
-        const msg = {
+        this.pendingResponses.set(request_id, { resolve, reject });
+        this.pendingSayFns.set(request_id, say_fn);
+        this.ws.send(JSON.stringify({
           type: 'request',
-          request_id: requestId,
-          agent: agentName,
+          request_id,
+          request_ids,
+          agent,
           action,
           version,
           payload
-        };
-        this.ws.send(JSON.stringify(msg));
+        }));
       });
     };
+
+    toolObject.toJSON = () => {
+      const request_id = this._generateRequestId();
+
+      return new Promise((resolve, reject) => {
+        this.pendingResponses.set(request_id, { resolve, reject });
+        this.ws.send(JSON.stringify({
+          type: 'seek',
+          request_id,
+          agent,
+          action,
+          version
+        }));
+      });
+    };
+
+    return toolObject;
   }
 
   _generateRequestId() {
     return Math.random().toString(36).substring(2, 15);
   }
 
-  say(requestId, message) {
+  async ack({ request_id: requestId, confirmationMessage }, payload) {
     return new Promise((resolve) => {
-      const msg = {
-        type: 'say',
-        request_id: requestId,
-        message
-      };
-      console.log(`\x1b[32m[LOG] ${message}\x1b[0m`)
-      this.ws.send(JSON.stringify(msg));
-      resolve();
-    });
-  }
-
-  ack(requestId, payload) {
-    return new Promise((resolve) => {
-      const msg = {
+      this.ws.send(JSON.stringify({
         type: 'response',
         request_id: requestId,
+        key: confirmationMessage,
         payload
-      };
-      this.ws.send(JSON.stringify(msg));
+      }));
       resolve();
     });
   }
@@ -82,107 +102,119 @@ export class BuoyClient {
     this.taskHandlers.set(actionName, handler);
   }
 
-  logs(handler) {
-    this.logHandlers.push(handler);
+  async confirm({ confirmationMessage }) {
+    if (!confirmationMessage) return;
+    this.ws.send(JSON.stringify({
+      type: 'ack',
+      key: confirmationMessage
+    }));
   }
 
   async close() {
-    if (this.ws) {
-      this.ws.close();
-    }
+    await this.ws.close();
   }
 
-  _handleMessage(message) {
+  async _handleMessage(m) {
     try {
-      switch(message.type) {
+      switch(m.type) {
         case 'tools':
-            this.tools = message.tools;
-            this.toolsInitialized = true;
+          break;
 
-            // Process any pending tool requests
-            while (this.pendingToolRequests.length > 0) {
-              const { agentName, version, action, payload, resolve, reject } = this.pendingToolRequests.shift();
-              if (this.tools.some(t => t.agent_name === agentName)) {
-                const requestId = this._generateRequestId();
-                this.pendingResponses.set(requestId, { resolve, reject });
-                const msg = {
-                  type: 'request',
-                  request_id: requestId,
-                  agent: agentName,
-                  action,
-                  version,
-                  payload
-                };
-                this.ws.send(JSON.stringify(msg));
-              } else {
-                reject(new Error(`Agent ${agentName} not found in available tools`));
-              }
-            }
-            break;
+        case 'info':
+        // deprecated - info messages are no longer used
+          const pendingInfo = this.pendingResponses.get(m.request_id);
+          if (pendingInfo) {
+            pendingInfo.resolve(m.payload);
+            this.pendingResponses.delete(m.request_id);
+          }
+          break;
 
         case 'request':
-          const actionName = message.action;
+          const actionName = m.action;
+          const agent = m.agent;
           const handler = this.taskHandlers.get(actionName);
+          const requestIds = m.request_ids || []
+          const say = (msg) => this.ws.send(JSON.stringify({
+            type: 'say',
+            request_ids: requestIds,
+            message: msg
+          }));
+          const ack = (payload) => this.ack(m, payload);
+
+          const confirmationMessage = m.confirmationMessage;
+
           if (handler) {
-            const say = (msg) => this.say(message.request_id, msg);
-            const ack = (payload) => this.ack(message.request_id, payload);
-
-            if (message.confirmationMessage) {
+            handler(
+              { ...m.payload },
+              { say, parent: requestIds }
+            ).then(ack).catch((err) => {
+              console.error(`Error in task handler for action '${actionName}':`, err);
               this.ws.send(JSON.stringify({
-                type: 'ack',
-                key: message.confirmationMessage
+                type: 'failure',
+                request_id: m.request_id,
+                key: confirmationMessage,
+                error: `Error in ${agent.name}/${agent.version}#${actionName}: ${err.message}`
               }));
-            }
-
-            handler({
-              args: message.payload,
-              say,
-              ack
             });
           } else {
+            console.error(`No handler found for ${agent.name}/${agent.version}#${actionName}`);
+            this.confirm(m);
+            this.ws.send(JSON.stringify({
+              type: 'failure',
+              request_id: m.request_id,
+              key: confirmationMessage,
+              error: `No handler found for ${agent.name}/${agent.version}#${actionName}`
+            }));
           }
           break;
 
         case 'response':
-          const pending = this.pendingResponses.get(message.request_id);
-          if (pending) {
-            if (message.error) {
-              pending.reject(new Error(message.error));
-            } else {
-              pending.resolve(message.payload);
-            }
-            this.pendingResponses.delete(message.request_id);
-          } else {
+          const pendingResponse = this.pendingResponses.get(m.request_id);
+          if (pendingResponse) {
+            pendingResponse.resolve(m.payload);
+            this.pendingResponses.delete(m.request_id);
           }
+          this.pendingSayFns.delete(m.request_id);
+          this.confirm(m);
+          break;
 
-          if (message.confirmationMessage) {
-            this.ws.send(JSON.stringify({
-              type: 'ack',
-              key: message.confirmationMessage
-            }));
+        case 'failure':
+          console.error(`Failure message received: ${m.error}`);
+          const pendingError = this.pendingResponses.get(m.request_id);
+          if (pendingError) {
+            pendingError.reject(new Error(m.error));
+            this.pendingResponses.delete(m.request_id);
           }
+          this.pendingSayFns.delete(m.request_id);
+          this.confirm(m);
           break;
 
         case 'say':
-          if (message.confirmationMessage) {
-            this.ws.send(JSON.stringify({
-              type: 'ack',
-              key: message.confirmationMessage
-            }));
-          }
-          this.logHandlers.forEach(handler => handler({
-            request_id: message.request_id,
-            message: message.message,
-            from: message.from,
-            timestamp: message.timestamp
-          }));
+          const reqIds = Array.isArray(m.request_ids) ? m.request_ids : [m.request_ids];
+          reqIds
+            .map((i) => this.pendingSayFns.get(i))
+            .filter(Boolean)
+            .map((sayFn) => sayFn(m.message));
+          this.confirm(m);
           break;
 
         default:
-          console.log(`Unknown message type: ${message.type}`);
+          console.log(`Unknown message type: ${m.type}`);
       }
     } catch (err) {
       console.error('Error handling message:', err);
     }
   }
+}
+export default async function(ws, config) {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('Connection timeout - no hello message received'));
+    }, 5000);
+
+    const client = new BuoyClient(ws, config, () => {
+      clearTimeout(timeoutId);
+      resolve(client);
+    });
+  });
 }

@@ -31,13 +31,6 @@ const client = await Buoy.connect({
   token: 'agent-token',
   name: 'myagent',
   version: '1.0.0',
-  agents: [
-    {
-      name: 'otheragent',
-      version: '1.0.0',
-      actions: ['dostuff']
-    }
-  ],
   actions: [
     {
       name: 'myaction',
@@ -64,10 +57,16 @@ client.on('myaction', async ({ args, say, ack }) => {
 });
 
 // Call other agent tools
-const otherAgent = client.tool('otheragent');
-const result = await otherAgent('dostuff', {
+const otherAgent = client.tool('otheragent', '1.4.3', 'dostuff');
+const result = await otherAgent({
   data: 'example'
 });
+
+// or if it is subtask
+const otherAgent2 = await client.tool('otheragent', '0.14.1', 'dostuff');
+const result2 = await otherAgent2({
+  data: 'example'
+}, parent_request_id);
 
 // Log messages
 client.logs(({ message, from, timestamp }) => {
@@ -83,7 +82,6 @@ The `connect()` method accepts the following options:
 - `name` - Agent name identifier
 - `version` - Agent version (semver format)
 - `actions` - Array of action definitions
-- `agents` - Array of required agent configurations
 - `ws_url` - Custom WebSocket URL (defaults to env JUNCTION_WS_URL)
 - `http_url` - Custom HTTP URL (defaults to env JUNCTION_HTTP_URL)
 
@@ -92,10 +90,10 @@ The `connect()` method accepts the following options:
 ### Client Methods
 
 - `connect(config)` - Connect to Junction server
-- `tool(agentName, version)` - Get tool executor for an agent
+- `tool(agentName, version, action)` - Get tool executor for an agent
 - `say(requestId, message)` - Log a message
 - `ack(requestId, payload)` - Acknowledge a request with response
-- `on(actionName, handler)` - Register an action handler
+- `on(handler)` - Register an action handler
 - `logs(handler)` - Register a log handler
 - `close()` - Close the connection
 
