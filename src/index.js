@@ -51,7 +51,7 @@ export default async function Buoy(config1, config2 = {}) {
   })({ port });
 
   const wsUrl = (function ({ host, wsProtocol }) {
-    config.ws_url || process.env.JUNCTION_WS_URL || `${wsProtocol}://${host}/connection`;
+    return config.ws_url || process.env.JUNCTION_WS_URL || `${wsProtocol}://${host}/connection`;
   })({ host, wsProtocol });
 
   const httpUrl = (function ({ host, httpProtocol }) {
