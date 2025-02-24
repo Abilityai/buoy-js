@@ -6,6 +6,8 @@ const requestor = async () => {
     token: 'parent-token',
     name: 'parent',
     version: '1.0.0',
+    description: 'Parent service that handles number processing requests',
+    readme: '# Parent Service\n\nThis service handles number processing requests by coordinating with other services.\n\n## Features\n- Processes numeric requests\n- Coordinates with repeater service\n- Returns joined results',
     actions: [{
       name: 'request',
       description: 'Makes a request with a number',
@@ -37,6 +39,8 @@ const joiner = async () => {
     name: 'repeater',
     version: '1.0.2',
     token: 'repeater-token',
+    description: 'Service that joins multiple random numbers',
+    readme: '# Repeater Service\n\nThis service generates and joins multiple random numbers.\n\n## Features\n- Generates multiple random numbers\n- Joins numbers into comma-separated string\n- Coordinates with randomizer service',
     actions: [{
       name: 'join',
       description: 'Makes multiple random number requests and joins results',
@@ -78,6 +82,8 @@ const randomizer = async () => {
     name: 'random',
     version: '1.1.0',
     token: 'random-token',
+    description: 'Service that generates random numbers within bounds',
+    readme: '# Random Number Generator\n\nThis service generates random numbers within specified bounds.\n\n## Features\n- Generates random integers\n- Configurable upper and lower bounds\n- Returns single random number per request',
     actions: [{
       name: 'randomize',
       description: 'Generates a random number between lower and upper bounds',
@@ -115,7 +121,9 @@ const main = async () => {
   const client = await Buoy({
     name: "test-client",
     version: "1.0.0",
-    token: "test-token"
+    token: "test-token",
+    description: "Test client for testing the number processing pipeline",
+    readme: "# Test Client\n\nClient for testing the number processing pipeline.\n\n## Usage\nGenerates random test cases and validates results."
   })
 
   const requestorTool = client.tool('parent', '1.0.0', 'request');

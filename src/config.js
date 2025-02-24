@@ -1,3 +1,7 @@
+import { readFileSync, readdirSync } from 'fs';
+import { join } from 'path';
+import yaml from 'js-yaml';
+
 /**
  * Configuration utilities for Buoy agent
  */
@@ -54,6 +58,8 @@ export default function getConfig(config1, config2 = {}) {
   const version = getAgentVersion(config);
   const token = config.token || process.env.AGENT_TOKEN || process.env.BUOY_TOKEN;
   const actions = getActions(config);
+  const description = getDescription(config);
+  const readme = getReadme(config);
 
   if (!token) throw new Error('Agent token is required');
 
@@ -63,7 +69,9 @@ export default function getConfig(config1, config2 = {}) {
     token,
     actions,
     wsUrl,
-    httpUrl
+    httpUrl,
+    description,
+    readme,
   };
 }
 
@@ -138,4 +146,40 @@ function getActions(config) {
       return [];
     }
   })();
+}
+
+function getReadme({ readme }) {
+  if (readme) {
+    return readme;
+  }
+
+  const baseNames = ['readme.md', 'readme.markdown', 'readme.txt', 'readme'];
+  const files = readdirSync(process.cwd());
+
+  for (const baseName of baseNames) {
+    const matchingFile = files.find(file => file.toLowerCase() === baseName);
+    if (matchingFile) {
+      try {
+        return readFileSync(join(process.cwd(), matchingFile), 'utf8');
+      } catch (err) {
+        continue;
+      }
+    }
+  }
+
+  return '';
+}
+
+function getDescription({ description }) {
+  if (description) {
+    return description;
+  }
+
+  try {
+    const packageJson = JSON.parse(readFileSync(join(process.cwd(), 'package.json')));
+    return packageJson.description || '';
+  } catch (err) {
+    console.error('Error reading package.json:', err);
+    return '';
+  }
 }

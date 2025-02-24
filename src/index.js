@@ -3,17 +3,20 @@ dotenv.config();
 
 import WebSocket from 'ws';
 import axios from 'axios';
-import { readFileSync } from 'fs';
-import { join } from 'path';
-import yaml from 'js-yaml';
 
 import getConfig from './config.js';
 import BuoyClient from './buoy-client.js';
 
 export default async function Buoy(config1, config2 = {}) {
-  const { name, version, token, actions, wsUrl, httpUrl } = getConfig(config1, config2);
+  const { name, version, token, actions, wsUrl, httpUrl, readme, description } = getConfig(config1, config2);
 
-  const payload = { name, version, actions };
+  const payload = {
+    name,
+    version,
+    actions,
+    readme,
+    description,
+  };
   const headers = { token, payload: JSON.stringify(payload) };
 
   return new Promise((resolve, reject) => {
