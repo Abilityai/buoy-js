@@ -8,7 +8,7 @@ import getConfig from './config.js';
 import BuoyClient from './buoy-client.js';
 
 export default async function Buoy(config1, config2 = {}) {
-  const { name, version, token, actions, wsUrl, httpUrl, readme, description } = getConfig(config1, config2);
+  const { name, version, token, actions, wsUrl, httpUrl, readme, description, prefetch } = getConfig(config1, config2);
 
   const payload = {
     name,
@@ -16,6 +16,7 @@ export default async function Buoy(config1, config2 = {}) {
     actions,
     readme,
     description,
+    prefetch
   };
   const headers = { token, payload: JSON.stringify(payload) };
 
