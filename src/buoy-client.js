@@ -152,6 +152,7 @@ class BuoyClient {
               this.ws.send(JSON.stringify({
                 type: 'failure',
                 request_id: m.request_id,
+                request_ids: requestIds,
                 key: confirmationMessage,
                 error: `Error in ${agent.name}/${agent.version}#${actionName}: ${err.message}`
               }));
@@ -162,6 +163,7 @@ class BuoyClient {
             this.ws.send(JSON.stringify({
               type: 'failure',
               request_id: m.request_id,
+              request_ids: requestIds,
               key: confirmationMessage,
               error: `No handler found for ${agent.name}/${agent.version}#${actionName}`
             }));
