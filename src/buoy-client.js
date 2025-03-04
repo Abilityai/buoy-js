@@ -34,14 +34,24 @@ class BuoyClient {
     return this.config.version;
   }
 
+  /**
+   * Create a tool function that makes requests to another agent
+   * @param {string} agent - Agent name
+   * @param {string} version - Agent version
+   * @param {string} action - Action name to invoke
+   * @returns {Function} Tool function
+   */
   tool(agent, version, action) {
     const toolObject = async (payload, ...args) => {
       let request_ids = undefined;
       let say_fn = () => {};
+      let title = action; // Default title to action name
 
       for (const arg of args) {
         if (typeof arg === 'function') {
           say_fn = arg;
+        } else if (typeof arg === 'string') {
+          title = arg; // If string is provided, use as title
         } else {
           request_ids = arg;
         }
@@ -59,7 +69,8 @@ class BuoyClient {
           agent,
           action,
           version,
-          payload
+          payload,
+          title
         }));
       });
     };
@@ -134,10 +145,16 @@ class BuoyClient {
           const agent = m.agent;
           const handler = this.taskHandlers.get(actionName);
           const requestIds = m.request_ids || []
-          const say = (msg) => this.ws.send(JSON.stringify({
+          /**
+           * Send a message during task execution
+           * @param {string|object} msg - Message content or object with text property
+           * @param {string} [title] - Optional title for the message
+           */
+          const say = (msg, title) => this.ws.send(JSON.stringify({
             type: 'say',
             request_ids: requestIds,
-            message: msg
+            message: msg,
+            title
           }));
           const ack = (payload) => this.ack(m, payload);
 
@@ -191,14 +208,33 @@ class BuoyClient {
           this.confirm(m);
           break;
 
-        case 'say':
-          const reqIds = Array.isArray(m.request_ids) ? m.request_ids : [m.request_ids];
-          reqIds
-            .map((i) => this.pendingSayFns.get(i))
-            .filter(Boolean)
-            .map((sayFn) => sayFn(m.message));
-          this.confirm(m);
-          break;
+          case 'say':
+            const reqIds = Array.isArray(m.request_ids) ? m.request_ids : [m.request_ids];
+            reqIds
+              .map((i) => this.pendingSayFns.get(i))
+              .filter(Boolean)
+              .map((sayFn) => {
+                // Process message based on format (legacy string or new structured format)
+                let messageToPass;
+                if (typeof m.message === 'string') {
+                  // Legacy format: just a string
+                  messageToPass = m.message;
+                } else if (m.message && typeof m.message === 'object') {
+                  // New format: object with text and chain
+                  messageToPass = m.message;
+                  if (typeof messageToPass.text === 'string' && !('message' in messageToPass)) {
+                    // If there's only 'text' property but no 'message', create backward compatibility
+                    messageToPass.message = messageToPass.text;
+                  }
+                } else {
+                  // Fallback for any other case
+                  messageToPass = m.message;
+                }
+                // Pass the entire message object to the callback
+                sayFn(messageToPass);
+              });
+            this.confirm(m);
+            break;
 
         default:
           console.log(`Unknown message type: ${m.type}`);
