@@ -18,7 +18,16 @@ export default async function Buoy(config1, config2 = {}) {
     description,
     prefetch
   };
-  const headers = { token, payload: JSON.stringify(payload) };
+
+  // Encode payload as base64
+  const payloadString = JSON.stringify(payload);
+  const base64Payload = Buffer.from(payloadString).toString('base64');
+
+  const headers = {
+    token,
+    payload: base64Payload,
+    'payload-encoding': 'base64'
+  };
 
   return new Promise((resolve, reject) => {
     let ws;
@@ -64,13 +73,10 @@ export default async function Buoy(config1, config2 = {}) {
       }
     }
 
-    async function pingServer({ payload, token }) {
+    async function pingServer() {
       try {
         const response = await axios.get(`${httpUrl}/ping`, {
-          headers: {
-            token,
-            payload: JSON.stringify(payload)
-          }
+          headers
         });
         if (response.status === 200) {
           if (response.data === 'pong') {
@@ -86,15 +92,15 @@ export default async function Buoy(config1, config2 = {}) {
       }
     }
 
-    async function createWebSocket({ payload, token }) {
+    async function createWebSocket() {
       // First check if server is available
-      const serverStatus = await pingServer({ payload, token });
+      const serverStatus = await pingServer();
       if (typeof serverStatus === 'string') {
         reject(new Error(serverStatus));
         return;
       }
       if (serverStatus === false) {
-        setTimeout(() => createWebSocket({ payload, token }), 1000);
+        setTimeout(createWebSocket, 1000);
         return;
       }
 
@@ -111,7 +117,7 @@ export default async function Buoy(config1, config2 = {}) {
       ws.on('close', () => {
         ws = null;
         if (!closedByUser) {
-          setTimeout(() => {createWebSocket({ payload, token }) }, 1000);
+          setTimeout(createWebSocket, 1000);
         }
       });
 
@@ -125,6 +131,6 @@ export default async function Buoy(config1, config2 = {}) {
       attachHandlers(ws);
     }
 
-    createWebSocket({ payload, token });
+    createWebSocket();
   });
 }
