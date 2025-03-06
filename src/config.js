@@ -23,6 +23,7 @@ const DEFAULT_PORT = 3005;
  * @config {string} config.http_protocol - HTTP protocol ('http'/'https')
  * @config {string} config.ws_url - Full WebSocket URL override
  * @config {string} config.http_url - Full HTTP URL override
+ * @config {string} config.host - Combined domain:port string (alternative to separate domain and port)
  */
 
 /**
@@ -44,8 +45,27 @@ export default function getConfig(config1, config2 = {}) {
     config = { ...config, ...config2 };
   }
 
-  const domain = config.domain || process.env.JUNCTION_DOMAIN || DEFAULT_DOMAIN;
-  const port = config.port || process.env.JUNCTION_PORT || DEFAULT_PORT;
+  // Parse host from JUNCTION_HOST if available
+  let domain = config.domain;
+  let port = config.port;
+
+  // Process host string if provided (takes precedence over separate domain/port)
+  const hostString = config.host || process.env.JUNCTION_HOST;
+  if (hostString) {
+    const hostParts = hostString.split(':');
+    domain = hostParts[0];
+    port = hostParts.length > 1 ? parseInt(hostParts[1]) : (port || DEFAULT_PORT);
+
+    // If JUNCTION_HOST is provided, HTTP_PROTOCOL is mandatory
+    // but allow config or env var to override
+    if (process.env.JUNCTION_HOST && !config.http_protocol && !process.env.JUNCTION_HTTP_PROTOCOL) {
+      throw new Error('JUNCTION_HTTP_PROTOCOL must be specified when using JUNCTION_HOST');
+    }
+  }
+
+  // Fall back to individual values if no host was provided
+  domain = domain || process.env.JUNCTION_DOMAIN || DEFAULT_DOMAIN;
+  port = port || process.env.JUNCTION_PORT || DEFAULT_PORT;
 
   const host = getHost({ domain, port });
   const wsProtocol = getWsProtocol({ port, config });
@@ -160,7 +180,10 @@ function getReadme({ readme }) {
     const matchingFile = files.find(file => file.toLowerCase() === baseName);
     if (matchingFile) {
       try {
-        return readFileSync(join(process.cwd(), matchingFile), 'utf8');
+        // Use 'utf-8' encoding explicitly to ensure proper handling of UTF-8 characters
+        // This ensures special symbols like "•" are properly read and can be serialized to JSON
+        const content = readFileSync(join(process.cwd(), matchingFile), { encoding: 'utf-8' });
+        return content;
       } catch (err) {
         continue;
       }
